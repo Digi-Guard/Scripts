@@ -70,6 +70,9 @@ def ssh_brute_force():
 # Function for RDP Brute Force
 def rdp_brute_force():
     # Prompt user for the RDP server IP address
+    # This requires CIDR notation 
+    # To test a subnet use the actual subnet example: /24
+    # to test a single IP address use /32
     rdp_ip = input("Enter the RDP server IP address: ")
 
     # Prompt user for the known username
