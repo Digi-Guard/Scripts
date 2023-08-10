@@ -1,0 +1,529 @@
+# This template was heavily revised from a previous template found in AWS resources.
+# This is just a starting point The Web Server hosts can be configured to use pre-existing instances.
+AWSTemplateFormatVersion: '2010-09-09'
+# This template boots 2 EC2 instances, installs CloudWacth Logs agent on each server. 
+# 2 CloudWatch Metric Filter and alarms are configured to catch suspicious SSH activity
+Description: AWS CloudFormation Sample Template for CloudWatch Logs.
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  OperatorEmail:
+    Description: Email address to notify if there are any scaling operations
+    Type: String
+  InstanceType:
+    AllowedValues:
+    - t1.micro
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - m1.small
+    - m1.medium
+    - m1.large
+    - m1.xlarge
+    - m2.xlarge
+    - m2.2xlarge
+    - m2.4xlarge
+    - m3.medium
+    - m3.large
+    - m3.xlarge
+    - m3.2xlarge
+    - m4.large
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: t2.small
+    Description: WebServer EC2 instance type
+    Type: String  
+Mappings:
+  AWSInstanceType2Arch:
+    c1.medium:
+      Arch: PV64
+    c1.xlarge:
+      Arch: PV64
+    c3.2xlarge:
+      Arch: HVM64
+    c3.4xlarge:
+      Arch: HVM64
+    c3.8xlarge:
+      Arch: HVM64
+    c3.large:
+      Arch: HVM64
+    c3.xlarge:
+      Arch: HVM64
+    c4.2xlarge:
+      Arch: HVM64
+    c4.4xlarge:
+      Arch: HVM64
+    c4.8xlarge:
+      Arch: HVM64
+    c4.large:
+      Arch: HVM64
+    c4.xlarge:
+      Arch: HVM64
+    cc2.8xlarge:
+      Arch: HVM64
+    cr1.8xlarge:
+      Arch: HVM64
+    d2.2xlarge:
+      Arch: HVM64
+    d2.4xlarge:
+      Arch: HVM64
+    d2.8xlarge:
+      Arch: HVM64
+    d2.xlarge:
+      Arch: HVM64
+    g2.2xlarge:
+      Arch: HVMG2
+    g2.8xlarge:
+      Arch: HVMG2
+    hi1.4xlarge:
+      Arch: HVM64
+    hs1.8xlarge:
+      Arch: HVM64
+    i2.2xlarge:
+      Arch: HVM64
+    i2.4xlarge:
+      Arch: HVM64
+    i2.8xlarge:
+      Arch: HVM64
+    i2.xlarge:
+      Arch: HVM64
+    m1.large:
+      Arch: PV64
+    m1.medium:
+      Arch: PV64
+    m1.small:
+      Arch: PV64
+    m1.xlarge:
+      Arch: PV64
+    m2.2xlarge:
+      Arch: PV64
+    m2.4xlarge:
+      Arch: PV64
+    m2.xlarge:
+      Arch: PV64
+    m3.2xlarge:
+      Arch: HVM64
+    m3.large:
+      Arch: HVM64
+    m3.medium:
+      Arch: HVM64
+    m3.xlarge:
+      Arch: HVM64
+    m4.10xlarge:
+      Arch: HVM64
+    m4.2xlarge:
+      Arch: HVM64
+    m4.4xlarge:
+      Arch: HVM64
+    m4.large:
+      Arch: HVM64
+    m4.xlarge:
+      Arch: HVM64
+    r3.2xlarge:
+      Arch: HVM64
+    r3.4xlarge:
+      Arch: HVM64
+    r3.8xlarge:
+      Arch: HVM64
+    r3.large:
+      Arch: HVM64
+    r3.xlarge:
+      Arch: HVM64
+    t1.micro:
+      Arch: PV64
+    t2.large:
+      Arch: HVM64
+    t2.medium:
+      Arch: HVM64
+    t2.micro:
+      Arch: HVM64
+    t2.nano:
+      Arch: HVM64
+    t2.small:
+      Arch: HVM64
+  AWSRegionArch2AMI:
+    ap-south-1:
+      HVM64: ami-d7abd1b8
+      HVMG2: NOT_SUPPORTED
+      PV64: NOT_SUPPORTED
+    ca-central-1:
+      HVM64: ami-5ac17f3e
+      HVMG2: NOT_SUPPORTED
+      PV64: NOT_SUPPORTED
+    ap-northeast-1:
+      HVM64: ami-383c1956
+      HVMG2: ami-08e5c166
+      PV64: ami-393c1957
+    ap-northeast-2:
+      HVM64: ami-249b554a
+      HVMG2: NOT_SUPPORTED
+      PV64: NOT_SUPPORTED
+    ap-southeast-1:
+      HVM64: ami-c9b572aa
+      HVMG2: ami-5a15d239
+      PV64: ami-34bd7a57
+    ap-southeast-2:
+      HVM64: ami-48d38c2b
+      HVMG2: ami-0c1a446f
+      PV64: ami-ced887ad
+    cn-north-1:
+      HVM64: ami-43a36a2e
+      HVMG2: NOT_SUPPORTED
+      PV64: ami-18ac6575
+    eu-central-1:
+      HVM64: ami-bc5b48d0
+      HVMG2: ami-ba1a09d6
+      PV64: ami-794a5915
+    eu-west-1:
+      HVM64: ami-bff32ccc
+      HVMG2: ami-83fd23f0
+      PV64: ami-95e33ce6
+    sa-east-1:
+      HVM64: ami-6817af04
+      HVMG2: NOT_SUPPORTED
+      PV64: ami-7d15ad11
+    us-east-1:
+      HVM64: ami-60b6c60a
+      HVMG2: ami-e998ea83
+      PV64: ami-5fb8c835
+    us-west-1:
+      HVM64: ami-d5ea86b5
+      HVMG2: ami-943956f4
+      PV64: ami-56ea8636
+    us-west-2:
+      HVM64: ami-f0091d91
+      HVMG2: ami-315f4850
+      PV64: ami-d93622b8
+Resources:
+  MySubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: vpc-06cbf7a70b806e1f2
+      CidrBlock: 172.31.3.0/24
+      MapPublicIpOnLaunch: true
+  # define the EC2 assume rule
+  LogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: LogRolePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:Create*
+            - logs:PutLogEvents
+            Resource:
+            - arn:aws:logs:*:*:*
+  LogRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: LogRole
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp:
+          Ref: SSHLocation
+  # EC2 Server configuration:
+  # - Install PHP & httpd
+  # - Create temp CloudWatch Log agent configuration file, define log file, group and stream name
+  # - Save stack metadata
+  # - Start related services
+  # - Use 'User Data' to install CloudWatch Log agent, send signal to stack upon sucessfull agent installation and initilization
+  WebServerHost:
+    Type: AWS::EC2::Instance
+    Metadata:
+      Comment: Install a simple PHP application
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+              php: []
+          files:
+            "/tmp/cwlogs/sshaccess.conf":
+              content: !Sub |
+                [general]
+                state_file= /var/awslogs/agent-state
+                [/var/log/secure]
+                file = /var/log/secure
+                log_group_name = ${WebServerLogGroup}
+                log_stream_name = {instance_id}/ssh.log
+                datetime_format = %d/%b/%Y:%H:%M:%S
+              mode: '000400'
+              owner: "root"
+              group: "root"
+            "/var/www/html/index.php":
+              content: !Sub |
+                <?php
+                echo '<h1>AWS CloudFormation sample PHP application</h1>';
+                ?>
+              mode: '000644'
+              owner: apache
+              group: apache
+            "/etc/cfn/cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServerHost.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerHost --region ${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+              sendmail:
+                enabled: 'false'
+                ensureRunning: 'false'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    Properties:
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]      
+      KeyName:
+        Ref: KeyName
+      InstanceType: 
+        Ref: InstanceType
+      SubnetId:
+        Ref: MySubnet
+      SecurityGroupIds:
+      - sg-0392aa06bedec9221
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile
+      UserData:
+        "Fn::Base64":
+          !Sub |
+            #!/bin/bash -xe
+            # Get the latest CloudFormation package
+            yum update -y aws-cfn-bootstrap
+            # Start cfn-init
+            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r WebServerHost --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+            /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
+            # Get the CloudWatch Logs agent
+            wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+            # Install the CloudWatch Logs agent
+            python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/sshaccess.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+            # All done so signal success
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource WebServerHost --region ${AWS::Region}
+  WebServerHost2:
+    # same procedure as 'WebServerHost' - see comments above
+    Type: AWS::EC2::Instance
+    Metadata:
+      Comment: Install a simple PHP application
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+              php: []
+          files:
+            "/tmp/cwlogs/sshaccess.conf":
+              content: !Sub |
+                [general]
+                state_file= /var/awslogs/agent-state
+                [/var/log/secure]
+                file = /var/log/secure
+                log_group_name = ${WebServerLogGroup}
+                log_stream_name = {instance_id}/ssh.log
+                datetime_format = %d/%b/%Y:%H:%M:%S
+              mode: '000400'
+              owner: "root"
+              group: "root"
+            "/var/www/html/index.php":
+              content: !Sub |
+                <?php
+                echo '<h1>AWS CloudFormation sample PHP application 2 </h1>';
+                ?>
+              mode: '000644'
+              owner: apache
+              group: apache
+            "/etc/cfn/cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServerHost2.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerHost2 --region ${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+              sendmail:
+                enabled: 'false'
+                ensureRunning: 'false'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    Properties:
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]      
+      KeyName:
+        Ref: KeyName
+      InstanceType: 
+        Ref: InstanceType
+      SubnetId:
+        Ref: MySubnet
+      SecurityGroupIds:
+      - sg-0392aa06bedec9221
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile
+      UserData:
+        "Fn::Base64":
+          !Sub |
+            #!/bin/bash -xe
+            # Get the latest CloudFormation package
+            yum update -y aws-cfn-bootstrap
+            # Start cfn-init
+            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r WebServerHost2 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+            /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
+            # Get the CloudWatch Logs agent
+            wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+            # Install the CloudWatch Logs agent
+            python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/sshaccess.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+            # All done so signal success
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource WebServerHost2 --region ${AWS::Region}
+
+  WebServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  # InvalidUser and InvalidUserAlarm:
+  # When a user tries to SSH with invalid username the next line is logged in the SSH log file:
+  # Apr 20 02:39:35 ip-172-31-63-56 sshd[17136]: Received disconnect from xxx.xxx.xxx.xxx: 11:  [preauth]
+  InvalidUser:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName:
+        Ref: WebServerLogGroup
+      FilterPattern: "[Mon, day, timestamp, ip, id, status = Invalid, ...]"
+      MetricTransformations:
+      - MetricValue: '1'
+        MetricNamespace: SSH
+        MetricName: sshInvalidUser
+  InvalidUserAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The number of invalid users is greater than 2 over 1 minutes
+      MetricName: sshInvalidUser
+      Namespace: SSH
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '2'
+      AlarmActions:
+      - Ref: AlarmNotificationTopic
+      ComparisonOperator: GreaterThanThreshold
+  SSHReceiveddisconnect:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName:
+        Ref: WebServerLogGroup
+      FilterPattern: "[Mon, day, timestamp, ip, id, msg1, msg2 = disconnect, ...]"
+      MetricTransformations:
+      - MetricValue: '1'
+        MetricNamespace: SSH
+        MetricName: sshDisconnect
+  SSHReceiveddisconnectAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The number disconnect requests is greater then 10 in 5 minutes
+      MetricName: sshDisconnect
+      Namespace: SSH
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '5'
+      Threshold: '10'
+      AlarmActions:
+      - Ref: AlarmNotificationTopic
+      ComparisonOperator: GreaterThanThreshold
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint:
+          Ref: OperatorEmail
+        Protocol: email
+Outputs:
+  InstanceId:
+    Description: The instance ID of the first web server
+    Value:
+      Ref: WebServerHost
+  InstanceId2:
+    Description: The instance ID of the second web server
+    Value:
+      Ref: WebServerHost2
+  WebsiteURL1:
+    Value:
+      !Sub 'http://${WebServerHost.PublicDnsName}'
+    Description: URL for App server 1
+  WebsiteURL2:
+    Value:
+      !Sub 'http://${WebServerHost2.PublicDnsName}'
+    Description: URL for App server 2
+  PublicIP1:
+    Description: Public IP address of Application Server 1
+    Value:
+      !GetAtt WebServerHost.PublicIp
+  PublicIP2:
+    Description: Public IP address of Application Server 2
+    Value:
+      !GetAtt WebServerHost2.PublicIp
+  CloudWatchLogGroupName:
+    Description: The name of the CloudWatch log group
+    Value: !Ref WebServerLogGroup
